@@ -266,6 +266,759 @@ font-family:var(--disp);font-size:1.9rem;color:var(--cyan-hi);text-shadow:0 0 14
 <div class="qgrid" id="customList"></div>
 <form class="form" id="questForm" style="margin-top:10px">
 <input id="customTitle" maxlength="60" placeholder="Example: Read 10 pages" required>
+<input id="customDesc" maxlength="120" placeholder="Description (optional)">
+<div class="row2">
+<select id="customStat"></select>
+<select id="customXp">
+<option value="10">10 XP — Easy</option>
+<option value="20" selected>20 XP — Normal</option>
+<option value="35">35 XP — Hard</option>
+</select>
+</div>
+<button class="btn" type="submit">Add Custom Quest</button>
+</form>
+</article>
+
+<article class="panel">
+<div class="head"><h2 class="title">Boss Battles</h2><span class="muted" id="week"></span></div>
+<div class="boss">
+<h3>⚔ Weekly Boss — Clear Six in a Day</h3>
+<p>Complete six quests today. Reward: 100 XP and +2 to every attribute. Once per week.</p>
+<button class="btn gold" id="bossBtn" disabled>Locked</button>
+</div>
+<div class="boss">
+<h3>👑 Monthly Boss — The Long Campaign</h3>
+<p>Complete 30 quests within this calendar month. Reward: 300 XP, +5 to every attribute and +1 Skill Point. Once per month.</p>
+<button class="btn gold" id="bossMBtn" disabled>Locked</button>
+</div>
+</article>
+
+<article class="panel">
+<div class="head"><h2 class="title">Focus Training</h2><span class="muted">25-minute session</span></div>
+<div class="timer">
+<div class="clock" id="clock">25:00</div>
+<div class="timerbuttons">
+<button class="btn" id="startTimer">Start</button>
+<button class="btn" id="pauseTimer">Pause</button>
+<button class="btn danger" id="resetTimer">Reset</button>
+</div>
+</div>
+</article>
+
+</section>
+
+<!-- ================= SKILLS ================= -->
+<section class="page" id="page-skills">
+<article class="panel">
+<div class="head"><h2 class="title">Skill Tree</h2><span class="muted">Skill Points: <span class="sp" id="spTxt">0</span></span></div>
+<p class="muted" style="margin:0 0 12px">Earn 1 Skill Point per level. Unlock nodes top to bottom in each branch.</p>
+<div class="tree" id="tree"></div>
+</article>
+</section>
+
+<!-- ================= STATS ================= -->
+<section class="page" id="page-stats">
+<article class="panel">
+<div class="head"><h2 class="title">Attributes</h2><span class="muted">Maximum 100</span></div>
+<div class="stats" id="stats"></div>
+</article>
+<article class="panel">
+<div class="head"><h2 class="title">Statistics</h2></div>
+<div class="numbers" id="numbers"></div>
+</article>
+<article class="panel">
+<div class="head"><h2 class="title">XP — Last 14 Days</h2></div>
+<canvas id="chart" height="170"></canvas>
+</article>
+<article class="panel">
+<div class="head"><h2 class="title">Activity Calendar</h2><span class="muted" id="calLabel"></span></div>
+<div class="cal" id="cal"></div>
+</article>
+</section>
+
+<!-- ================= AWARDS ================= -->
+<section class="page" id="page-awards">
+<article class="panel">
+<div class="head"><h2 class="title">Titles</h2><span class="muted">Earned by level</span></div>
+<div class="titles" id="titles"></div>
+</article>
+<article class="panel">
+<div class="head"><h2 class="title">Achievements</h2><span class="muted" id="achCount"></span></div>
+<div class="achgrid" id="achievements"></div>
+</article>
+</section>
+
+<!-- ================= DATA ================= -->
+<section class="page" id="page-data">
+<article class="panel">
+<div class="head"><h2 class="title">Save Data</h2></div>
+<p class="muted" style="margin-top:0">Progress is stored in this browser and saves automatically. Export a backup before switching devices. Old (v1) saves are imported automatically.</p>
+<div class="footeractions">
+<button class="btn small" id="exportBtn">Export Save</button>
+<label class="btn small" for="importFile">Import Save</label>
+<input class="hidden" id="importFile" type="file" accept=".json,application/json">
+<button class="btn small danger" id="resetData">Reset Progress</button>
+</div>
+</article>
+</section>
+
+</main>
+
+<div class="toast" id="toast"></div>
+<div class="modal" id="modal">
+<div class="modalcard">
+<h2>System Notice</h2>
+<div class="ring" id="modalLevel">1</div>
+<p id="modalText" style="margin:0 0 16px"></p>
+<button class="btn" id="closeModal">Continue</button>
+</div>
+</div>
+
+<script>
+"use strict";
+/* ============ storage (safe wrapper) ============ */
+const KEY="ascend-system-v2", OLDKEY="ascend-system-v1";
+const store={ok:true,mem:{},
+get(k){try{return localStorage.getItem(k)}catch(e){this.ok=false;return this.mem[k]||null}},
+set(k,v){try{localStorage.setItem(k,v)}catch(e){this.ok=false;this.mem[k]=v}},
+del(k){try{localStorage.removeItem(k)}catch(e){delete this.mem[k]}}};
+
+const statNames=["Knowledge","Focus","Communication","Confidence","Observation","Discipline","Fitness","Emotional Control"];
+const $=id=>document.getElementById(id);
+
+/* ============ quest pool ============ */
+const RAR={c:{name:"Common",xp:15},r:{name:"Rare",xp:25},e:{name:"Epic",xp:40},l:{name:"Legendary",xp:70}};
+function Q(t,d,g){return{t,d,g}}
+const POOL_C=[
+Q("Read 10 Pages","Read ten pages of any book.",{Knowledge:1}),
+Q("Note Review","Review today's class notes for 15 minutes.",{Knowledge:1}),
+Q("Push-Up Set","Do one set of push-ups at your level.",{Fitness:1}),
+Q("20-Minute Walk","Walk outside for twenty minutes.",{Fitness:1}),
+Q("Hydration Check","Drink six or more glasses of water today.",{Discipline:1}),
+Q("Zone Reset","Make your bed and tidy your desk.",{Discipline:1}),
+Q("Slow Breathing","Five minutes of slow, controlled breathing.",{"Emotional Control":1}),
+Q("Gratitude Log","Write down three things you are grateful for.",{"Emotional Control":1}),
+Q("Detail Scan","Write five details you noticed around you.",{Observation:1}),
+Q("Change Detection","Note one thing that changed in a familiar place.",{Observation:1}),
+Q("Sincere Thanks","Thank or greet someone sincerely.",{Communication:1}),
+Q("Reconnect","Message a friend you have not talked to this week.",{Communication:1}),
+Q("Five New Words","Learn five new words in any language.",{Knowledge:1}),
+Q("Stretch Routine","Ten minutes of stretching.",{Fitness:1}),
+Q("Morning Shield","No phone for the first 30 minutes after waking.",{Discipline:1}),
+Q("Three-Line Summary","Summarize one thing you learned today in three lines.",{Knowledge:1}),
+Q("Posture Check","Correct your posture three times today.",{Confidence:1}),
+Q("Genuine Compliment","Give someone a genuine compliment.",{Communication:1}),
+Q("Two Takeaways","Watch or read something educational and note two takeaways.",{Knowledge:1}),
+Q("Unasked Chore","Do one chore without being asked.",{Discipline:1}),
+Q("Still Mind","Sit for five minutes doing nothing. Just breathe.",{Focus:1}),
+Q("Single-Task","Work on one thing for 20 minutes without switching.",{Focus:1}),
+Q("Tomorrow Plan","Plan tomorrow in five bullet points.",{Discipline:1}),
+Q("Fuel Up","Eat at least one proper serving of fruit or vegetables.",{Fitness:1}),
+Q("Fix One Thing","Repair or clean up one small annoyance.",{Observation:1}),
+Q("Speak Up Once","Answer or speak up once in class or a group.",{Confidence:1}),
+Q("Journal Entry","Write one honest paragraph in a journal.",{"Emotional Control":1}),
+Q("Shortcut Learned","Learn one keyboard shortcut and use it.",{Knowledge:1}),
+Q("Ten-Minute Sketch","Sketch or doodle for ten minutes.",{Observation:1}),
+Q("Digital Cleanup","Sort ten files or photos on your device.",{Discipline:1}),
+];
+const POOL_R=[
+Q("Focus Block","25 minutes of study with zero distractions.",{Focus:1,Knowledge:1}),
+Q("Full Training","45-minute workout or sports session.",{Fitness:1,Discipline:1}),
+Q("Teach It Back","Explain a topic you are learning to someone, or out loud.",{Communication:1,Knowledge:1}),
+Q("Problem Grind","Solve ten practice problems.",{Knowledge:1,Focus:1}),
+Q("Memory Trial","Memorize a 10-item list and recall it after one hour.",{Knowledge:1,Focus:1}),
+Q("300 Words","Write 300+ words — story, essay or chapter.",{Knowledge:1,Confidence:1}),
+Q("Digital Craft","30 minutes practising editing, coding or design.",{Knowledge:1,Focus:1}),
+Q("Real Conversation","Ten-minute conversation. Ask at least three questions.",{Communication:1,Observation:1}),
+Q("Meditation","Meditate for ten minutes.",{"Emotional Control":1,Focus:1}),
+Q("Deep Clean","Fully clean or reorganize one zone of your room.",{Discipline:1,Observation:1}),
+Q("Cardio Run","Run 2 km or do 20 minutes of cardio.",{Fitness:2}),
+Q("Chapter Revision","Revise one full chapter and self-quiz on it.",{Knowledge:1,Discipline:1}),
+Q("Sharp Wake-Up","Wake up at your planned time with no snooze.",{Discipline:1,"Emotional Control":1}),
+Q("Screen-Free Hour","One full screen-free hour before bed.",{Discipline:1,"Emotional Control":1}),
+Q("Scene Analysis","Analyse one ad, scene or page — note the techniques used.",{Observation:1,Knowledge:1}),
+Q("Mini Lesson","Write a short lesson explaining today's topic.",{Communication:1,Knowledge:1}),
+Q("Mirror Practice","Practise speaking in front of a mirror for ten minutes.",{Confidence:1,Communication:1}),
+Q("Early Finish","Finish all homework before 8 PM.",{Discipline:1,Focus:1}),
+];
+const POOL_E=[
+Q("Deep Work","Two 25-minute focus sessions with a 5-minute break.",{Focus:2,Knowledge:2}),
+Q("Milestone Clear","Finish one full assignment or project milestone today.",{Discipline:2,Knowledge:2}),
+Q("Hour of Iron","60-minute training session.",{Fitness:2,Discipline:2}),
+Q("800 Words","Write 800+ words in one sitting.",{Knowledge:2,Focus:2}),
+Q("Mock Exam","Full past paper or mock test under timed conditions.",{Knowledge:2,Focus:2}),
+Q("Social Challenge","Start a conversation with someone new.",{Confidence:2,Communication:2}),
+Q("Create Complete","Create something start to finish — edit, artwork or program.",{Focus:2,Confidence:2}),
+Q("Day of Order","Write a schedule for today and follow it fully.",{Discipline:2,"Emotional Control":2}),
+Q("Twenty Facts","Memorize 20 facts or dates and score 90% on a self-test.",{Knowledge:2,Focus:2}),
+Q("Clean Fuel Day","No sugar and no junk food all day.",{Discipline:2,Fitness:2}),
+];
+const POOL_L=[
+Q("The Grind","Four focus sessions — 100 minutes of deep work in one day.",{Focus:3,Knowledge:3}),
+Q("Iron Body","90 minutes of total physical training today.",{Fitness:3,Discipline:3}),
+Q("The Author","Finish a full chapter or 1,500+ words.",{Knowledge:3,Confidence:3}),
+Q("Monk Mode","Entire day using your phone only when truly necessary.",{Discipline:3,"Emotional Control":3}),
+Q("The Orator","Present or record yourself speaking 5+ minutes, then review it.",{Confidence:3,Communication:3}),
+Q("Master Recall","Memorize 40 items and recall them after three hours.",{Knowledge:3,Focus:3}),
+];
+const POOL=[];
+[["c",POOL_C],["r",POOL_R],["e",POOL_E],["l",POOL_L]].forEach(([r,arr])=>{
+arr.forEach((q,i)=>POOL.push({id:`p-${r}-${i}`,rar:r,xp:RAR[r].xp,title:q.t,desc:q.d,gains:q.g}));
+});
+const QMAP={};POOL.forEach(q=>QMAP[q.id]=q);
+
+/* ============ rng / dates ============ */
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296}}
+function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`}
+function weekKey(){const d=new Date(),f=new Date(d.getFullYear(),0,1),days=Math.floor((d-f)/86400000),w=Math.ceil((days+f.getDay()+1)/7);return `${d.getFullYear()}-W${String(w).padStart(2,"0")}`}
+function monthKey(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`}
+
+function pickDaily(dateStr,lucky){
+const rng=mulberry32(hashStr(dateStr));
+const take=(arr,n,out)=>{const pool=arr.slice();while(n-->0&&pool.length){out.push(pool.splice(Math.floor(rng()*pool.length),1)[0].id)}};
+const ids=[];
+take(POOL.filter(q=>q.rar==="c"),3,ids);
+take(POOL.filter(q=>q.rar==="r"),1,ids);
+const roll=rng();
+let tier="r";
+if(roll<(lucky?0.10:0.05))tier="l";
+else if(roll<(lucky?0.45:0.35))tier="e";
+take(POOL.filter(q=>q.rar===tier&&!ids.includes(q.id)),1,ids);
+return ids;
+}
+
+/* ============ state ============ */
+function fresh(){return{v:2,name:"Player",level:1,xp:0,totalXp:0,totalQuests:0,streak:0,bestStreak:0,lastActive:null,
+stats:Object.fromEntries(statNames.map(x=>[x,10])),custom:[],
+daily:{date:null,ids:[],done:[]},bossW:{week:weekKey(),done:false},bossM:{month:monthKey(),done:false},
+sp:0,skills:[],login:{last:null,streak:0,best:0},hist:{},
+counters:{legend:0,bw:0,bm:0,logins:0,custom:0},ach:[],settings:{sound:true}}}
+function migrateV1(x){
+const s=fresh();
+["name","level","xp","totalXp","totalQuests","streak","lastActive"].forEach(k=>{if(x[k]!=null)s[k]=x[k]});
+s.bestStreak=x.streak||0;
+s.stats={...s.stats,...(x.stats||{})};
+s.custom=(x.custom||[]).map(q=>({id:q.id,title:q.title,stat:q.stat,xp:+q.xp||20}));
+s.sp=Math.max(0,(s.level-1));
+if(x.boss&&x.boss.week===weekKey()&&x.boss.done)s.bossW.done=true;
+return s;
+}
+function load(){
+try{const x=JSON.parse(store.get(KEY));if(x&&x.v===2)return {...fresh(),...x,stats:{...fresh().stats,...(x.stats||{})},counters:{...fresh().counters,...(x.counters||{})},settings:{...fresh().settings,...(x.settings||{})}}}catch(e){}
+try{const o=JSON.parse(store.get(OLDKEY));if(o){const m=migrateV1(o);return m}}catch(e){}
+return fresh();
+}
+let state=load();
+function save(){store.set(KEY,JSON.stringify(state))}
+function normalize(){
+if(state.daily.date!==today())state.daily={date:today(),ids:pickDaily(today(),hasSkill("s1")),done:[]};
+if(state.bossW.week!==weekKey())state.bossW={week:weekKey(),done:false};
+if(state.bossM.month!==monthKey())state.bossM={month:monthKey(),done:false};
+}
+
+/* ============ progression ============ */
+function need(l=state.level){return 100+(l-1)*35}
+function rank(l){return l>=50?"SSS":l>=40?"SS":l>=30?"S":l>=25?"A":l>=20?"B":l>=15?"C":l>=10?"D":"E"}
+const TITLES=[[1,"Rookie"],[5,"Awakened"],[10,"Fighter"],[15,"Elite Hunter"],[20,"Knight"],[25,"Commander"],[30,"Shadow Adept"],[35,"Marshal"],[40,"Sovereign"],[50,"Monarch"]];
+function titleFor(l){let t=TITLES[0][1];TITLES.forEach(([lv,n])=>{if(l>=lv)t=n});return t}
+function hasSkill(id){return state.skills.includes(id)}
+function xpMult(){
+const cap=hasSkill("b3")?15:10;
+let m=1+Math.min(state.streak,cap)*0.05;
+if(hasSkill("m1"))m+=0.05;
+if(hasSkill("m2"))m+=0.05;
+if(hasSkill("m3"))m+=0.10;
+return m;
+}
+function histAdd(dx,dq){
+const k=today();const h=state.hist[k]||(state.hist[k]={x:0,q:0});
+h.x+=dx;h.q+=dq;
+const keys=Object.keys(state.hist).sort();
+while(keys.length>120)delete state.hist[keys.shift()];
+}
+let pendingLevel=null;
+function gainXp(raw,useMult){
+const amt=Math.round(raw*(useMult?xpMult():1));
+state.xp+=amt;state.totalXp+=amt;histAdd(amt,0);
+let ups=0;
+while(state.xp>=need()){state.xp-=need();state.level++;ups++}
+if(ups>0){state.sp+=ups;pendingLevel={level:state.level,sp:ups}}
+return amt;
+}
+function showLevelModal(){
+if(!pendingLevel)return;
+$("modalLevel").textContent=pendingLevel.level;
+$("modalText").innerHTML=`You reached <b>Level ${pendingLevel.level}</b> — Rank <b>${rank(state.level)}</b>, Title: <b>${titleFor(state.level)}</b>.<br>+${pendingLevel.sp} Skill Point${pendingLevel.sp>1?"s":""} earned.`;
+$("modal").classList.add("show");sfx("lvl");pendingLevel=null;
+}
+function addStats(g,bonusFn){
+Object.entries(g).forEach(([k,v])=>{
+let add=v;if(bonusFn)add+=bonusFn(k);
+state.stats[k]=Math.min(100,(state.stats[k]||0)+add);
+});
+}
+function updateStreak(){
+const n=new Date(today()+"T00:00:00");
+if(!state.lastActive)state.streak=1;
+else{const p=new Date(state.lastActive+"T00:00:00"),diff=Math.round((n-p)/86400000);
+if(diff===1)state.streak++;else if(diff>1)state.streak=1;}
+state.lastActive=today();
+state.bestStreak=Math.max(state.bestStreak,state.streak);
+}
+
+/* ============ quests ============ */
+function customQuests(){return state.custom.map(q=>({id:`c-${q.id}`,rar:"c",custom:true,cid:q.id,xp:q.xp,title:q.title,desc:(q.desc&&q.desc.trim())?q.desc:`Custom training — ${q.stat}.`,gains:{[q.stat]:q.xp>=35?3:q.xp>=20?2:1}}))}
+function dailyQuests(){return state.daily.ids.map(id=>QMAP[id]).filter(Boolean)}
+function allQuests(){return dailyQuests().concat(customQuests())}
+function complete(id){
+if(state.daily.done.includes(id))return;
+const q=allQuests().find(x=>x.id===id);if(!q)return;
+if(state.daily.done.length===0)updateStreak();
+state.daily.done.push(id);
+state.totalQuests++;histAdd(0,1);
+if(q.rar==="l")state.counters.legend++;
+const first=Object.keys(q.gains)[0];
+addStats(q.gains,k=>(hasSkill("b1")&&k===first&&(k==="Fitness"||k==="Discipline"))?1:0);
+const amt=gainXp(q.xp,true);
+checkAch(false);save();render();
+toast(`Quest complete · +${amt} XP`);sfx("q");showLevelModal();
+}
+function removeCustom(cid){
+state.custom=state.custom.filter(q=>q.id!==cid);
+state.daily.done=state.daily.done.filter(x=>x!==`c-${cid}`);
+save();render();
+}
+
+/* ============ bosses & login ============ */
+function monthQuestCount(){
+const mk=monthKey();let n=0;
+Object.entries(state.hist).forEach(([k,v])=>{if(k.startsWith(mk))n+=v.q||0});
+return n;
+}
+function claimBossW(){
+if(state.bossW.done||state.daily.done.length<6)return;
+state.bossW.done=true;state.counters.bw++;
+const amt=gainXp(Math.round(100*(hasSkill("s3")?1.5:1)),false);
+addStats(Object.fromEntries(statNames.map(x=>[x,2])));
+checkAch(false);save();render();
+toast(`Weekly Boss cleared · +${amt} XP, +2 all attributes`);sfx("ach");showLevelModal();
+}
+function claimBossM(){
+if(state.bossM.done||monthQuestCount()<30)return;
+state.bossM.done=true;state.counters.bm++;state.sp++;
+const amt=gainXp(Math.round(300*(hasSkill("s3")?1.5:1)),false);
+addStats(Object.fromEntries(statNames.map(x=>[x,5])));
+checkAch(false);save();render();
+toast(`Monthly Boss cleared · +${amt} XP, +5 all attributes, +1 SP`);sfx("ach");showLevelModal();
+}
+function claimLogin(){
+if(state.login.last===today())return;
+if(state.login.last){
+const diff=Math.round((new Date(today()+"T00:00:00")-new Date(state.login.last+"T00:00:00"))/86400000);
+state.login.streak=diff===1?state.login.streak+1:1;
+}else state.login.streak=1;
+state.login.last=today();
+state.login.best=Math.max(state.login.best,state.login.streak);
+state.counters.logins++;
+let base=[15,20,25,30,35,45,70][(state.login.streak-1)%7];
+if(hasSkill("s2"))base=Math.round(base*1.5);
+const amt=gainXp(base,false);
+let msg=`Login reward · +${amt} XP`;
+if(state.login.streak%7===0){state.sp++;msg+=" · +1 Skill Point"}
+checkAch(false);save();render();toast(msg);sfx("q");showLevelModal();
+}
+
+/* ============ skill tree ============ */
+const SKILLS=[
+{id:"m1",br:"Mind",name:"XP Boost I",desc:"+5% XP from quests.",req:null},
+{id:"m2",br:"Mind",name:"XP Boost II",desc:"+5% more XP (10% total).",req:"m1"},
+{id:"m3",br:"Mind",name:"Overclock",desc:"+10% more XP (20% total).",req:"m2"},
+{id:"b1",br:"Body",name:"Conditioning",desc:"Fitness & Discipline quests grant +1 extra point.",req:null},
+{id:"b2",br:"Body",name:"Vitality",desc:"Instantly gain +3 to every attribute.",req:"b1"},
+{id:"b3",br:"Body",name:"Iron Will",desc:"Streak bonus cap rises to 15 days (+75% max).",req:"b2"},
+{id:"s1",br:"System",name:"Lucky Drop",desc:"Higher chance of Epic and Legendary daily quests.",req:null},
+{id:"s2",br:"System",name:"Treasure Sense",desc:"Login rewards give +50% XP.",req:"s1"},
+{id:"s3",br:"System",name:"Boss Slayer",desc:"Boss rewards give +50% XP.",req:"s2"},
+];
+function buySkill(id){
+const s=SKILLS.find(x=>x.id===id);if(!s)return;
+if(hasSkill(id)||state.sp<1||(s.req&&!hasSkill(s.req)))return;
+state.sp--;state.skills.push(id);
+if(id==="b2")addStats(Object.fromEntries(statNames.map(x=>[x,3])));
+checkAch(false);save();render();
+toast(`Skill unlocked: ${s.name}`);sfx("ach");
+}
+
+/* ============ achievements (100+) ============ */
+const ACH=[];
+const ROM=["I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI"];
+function A(id,icon,title,desc,test){ACH.push({id,icon,title,desc,test})}
+[1,5,10,25,50,75,100,150,200,300,400,500,750,1000].forEach((n,i)=>A(`q${n}`,"⚔","Quest Hunter "+ROM[i],`Complete ${n} quests.`,s=>s.totalQuests>=n));
+[2,5,10,15,20,25,30,35,40,45,50].forEach((n,i)=>A(`lv${n}`,"◆","Ascension "+ROM[i],`Reach Level ${n}.`,s=>s.level>=n));
+[2,3,7,14,21,30,50,75,100,150,200,365].forEach((n,i)=>A(`sk${n}`,"🔥","Streak "+ROM[i],`Reach a ${n}-day streak.`,s=>s.bestStreak>=n));
+[100,300,600,1000,2000,3500,5000,7500,10000,15000,25000,50000].forEach((n,i)=>A(`xp${n}`,"✦","Power "+ROM[i],`Earn ${n.toLocaleString()} total XP.`,s=>s.totalXp>=n));
+statNames.forEach(st=>[["Adept",30],["Expert",50],["Master",75],["MAX",100]].forEach(([nm,n])=>A(`st-${st}-${n}`,"▲",`${st} ${nm}`,`Raise ${st} to ${n}.`,s=>(s.stats[st]||0)>=n)));
+[1,3,5,10,20].forEach((n,i)=>A(`bw${n}`,"⚔","Boss Breaker "+ROM[i],`Clear ${n} weekly bosses.`,s=>s.counters.bw>=n));
+[1,2,4,8].forEach((n,i)=>A(`bm${n}`,"👑","Campaigner "+ROM[i],`Clear ${n} monthly bosses.`,s=>s.counters.bm>=n));
+[1,3,5,10,20].forEach((n,i)=>A(`lg${n}`,"★","Legend Slayer "+ROM[i],`Complete ${n} Legendary quests.`,s=>s.counters.legend>=n));
+[3,7,14,30,60,100].forEach((n,i)=>A(`li${n}`,"🎁","Faithful "+ROM[i],`Sign in ${n} times.`,s=>s.counters.logins>=n));
+[1,3,6,9].forEach((n,i)=>A(`tn${n}`,"🧬","Evolved "+ROM[i],`Unlock ${n} skill nodes.`,s=>s.skills.length>=n));
+[1,5,10].forEach((n,i)=>A(`cq${n}`,"🛠","Architect "+ROM[i],`Create ${n} custom quests.`,s=>s.counters.custom>=n));
+function checkAch(silent){
+ACH.forEach(a=>{
+if(!state.ach.includes(a.id)&&a.test(state)){
+state.ach.push(a.id);
+if(!silent){toast(`Achievement unlocked: ${a.title}`);sfx("ach")}
+}});
+}
+
+/* ============ sound ============ */
+let AC=null;
+function sfx(type){
+if(!state.settings.sound)return;
+try{
+AC=AC||new (window.AudioContext||window.webkitAudioContext)();
+const seq=type==="lvl"?[[392,0],[523,.1],[659,.2],[784,.3]]:type==="ach"?[[659,0],[988,.11]]:[[880,0]];
+seq.forEach(([f,t])=>{
+const o=AC.createOscillator(),g=AC.createGain();
+o.type="square";o.frequency.value=f;
+g.gain.setValueAtTime(.0001,AC.currentTime+t);
+g.gain.exponentialRampToValueAtTime(.05,AC.currentTime+t+.012);
+g.gain.exponentialRampToValueAtTime(.0001,AC.currentTime+t+.13);
+o.connect(g).connect(AC.destination);
+o.start(AC.currentTime+t);o.stop(AC.currentTime+t+.15);
+});
+}catch(e){}
+}
+
+/* ============ toasts ============ */
+const tq=[];let tBusy=false;
+function toast(m){tq.push(m);pump()}
+function pump(){
+if(tBusy||!tq.length)return;
+tBusy=true;const t=$("toast");
+t.textContent=tq.shift();t.classList.add("show");
+setTimeout(()=>{t.classList.remove("show");setTimeout(()=>{tBusy=false;pump()},220)},2100);
+}
+
+/* ============ rendering ============ */
+function renderStatus(){
+$("name").textContent=state.name;
+$("level").textContent=state.level;
+$("rank").textContent=rank(state.level);
+$("titleTag").textContent=titleFor(state.level);
+$("multChip").textContent=`XP ×${xpMult().toFixed(2)}`;
+$("streak").textContent=state.streak;
+$("doneCount").textContent=state.totalQuests;
+$("totalXp").textContent=state.totalXp.toLocaleString();
+$("xpText").innerHTML=`<b>${state.xp}</b> / ${need()} XP`;
+$("xpFill").style.width=`${Math.min(100,state.xp/need()*100)}%`;
+}
+function questCard(q,done){
+const el=document.createElement("div");
+el.className=`quest${done?" done":""}`;el.dataset.r=q.rar;
+const body=document.createElement("div");
+const h=document.createElement("h3");
+const chip=document.createElement("span");chip.className=`rchip ${q.rar}`;chip.textContent=q.custom?"Custom":RAR[q.rar].name;
+h.appendChild(chip);h.appendChild(document.createTextNode(q.title));
+const p=document.createElement("p");p.textContent=q.desc;
+const r=document.createElement("div");r.className="reward";
+r.textContent=`${q.xp} XP · ${Object.entries(q.gains).map(([k,v])=>`+${v} ${k}`).join(" · ")}`;
+body.append(h,p,r);
+const act=document.createElement("div");act.className="actions";
+const b=document.createElement("button");
+b.className=`btn small${done?" good":""}`;
+b.textContent=done?"Completed":"Complete";
+b.disabled=done;b.onclick=()=>complete(q.id);
+act.appendChild(b);
+if(q.custom){
+const d=document.createElement("button");
+d.className="btn small danger";d.textContent="Remove";
+d.onclick=()=>removeCustom(q.cid);act.appendChild(d);
+}
+el.append(body,act);
+return el;
+}
+function renderQuests(){
+const root=$("questList");root.innerHTML="";
+dailyQuests().forEach(q=>root.appendChild(questCard(q,state.daily.done.includes(q.id))));
+const c=$("customList");c.innerHTML="";
+const cq=customQuests();
+if(!cq.length){const p=document.createElement("p");p.className="muted";p.style.margin="0";p.textContent="No custom quests yet. Add your own training below.";c.appendChild(p)}
+cq.forEach(q=>c.appendChild(questCard(q,state.daily.done.includes(q.id))));
+$("dailyProgress").textContent=`${state.daily.done.length} completed today`;
+}
+function renderLogin(){
+const claimed=state.login.last===today();
+$("loginBtn").disabled=claimed;
+$("loginBtn").textContent=claimed?"Claimed":"Claim";
+$("loginStreakTxt").textContent=`Login streak: ${state.login.streak} day${state.login.streak===1?"":"s"}`;
+const nxt=[15,20,25,30,35,45,70][(claimed?state.login.streak:state.login.streak)%7]||15;
+$("loginDesc").textContent=claimed?"Reward claimed. Come back tomorrow to keep the chain alive.":"Claim your daily reward. Rewards grow with your login streak — every 7th day grants a Skill Point.";
+}
+function renderBoss(){
+$("week").textContent=`${weekKey()} · ${monthKey()}`;
+const b=$("bossBtn");
+if(state.bossW.done){b.textContent="Cleared This Week";b.disabled=true}
+else if(state.daily.done.length>=6){b.textContent="Claim Reward";b.disabled=false}
+else{b.textContent=`Locked (${state.daily.done.length}/6 today)`;b.disabled=true}
+const m=$("bossMBtn"),n=monthQuestCount();
+if(state.bossM.done){m.textContent="Cleared This Month";m.disabled=true}
+else if(n>=30){m.textContent="Claim Reward";m.disabled=false}
+else{m.textContent=`Locked (${n}/30 this month)`;m.disabled=true}
+}
+function renderTree(){
+$("spTxt").textContent=state.sp;
+const root=$("tree");root.innerHTML="";
+["Mind","Body","System"].forEach(br=>{
+const col=document.createElement("div");col.className="branch";
+const h=document.createElement("h4");h.textContent=br;col.appendChild(h);
+SKILLS.filter(s=>s.br===br).forEach(s=>{
+const owned=hasSkill(s.id);
+const locked=!owned&&((s.req&&!hasSkill(s.req))||state.sp<1);
+const el=document.createElement("div");
+el.className=`node${owned?" owned":locked?" locked":""}`;
+const st=document.createElement("strong");st.textContent=s.name;
+const sp=document.createElement("span");sp.textContent=s.desc;
+el.append(st,sp);
+const b=document.createElement("button");b.className="btn small";
+b.textContent=owned?"Unlocked":s.req&&!hasSkill(s.req)?"Requires previous":"Unlock (1 SP)";
+b.disabled=owned||locked;
+b.onclick=()=>buySkill(s.id);
+el.appendChild(b);
+col.appendChild(el);
+});
+root.appendChild(col);
+});
+}
+function renderStats(){
+const root=$("stats");root.innerHTML="";
+statNames.forEach(n=>{
+const v=state.stats[n]||0,el=document.createElement("div");
+el.className="stat";
+el.innerHTML=`<div class="stattop"><span>${n}</span><span class="statval">${v}</span></div><div class="bar"><div class="fill" style="width:${v}%"></div></div>`;
+root.appendChild(el);
+});
+const days=Object.keys(state.hist).length;
+const last14=lastNDays(14);
+const avg=Math.round(last14.reduce((a,d)=>a+(state.hist[d]?state.hist[d].x:0),0)/14);
+const nums=[
+["Total XP",state.totalXp.toLocaleString()],["Quests Done",state.totalQuests],["Best Streak",state.bestStreak+"d"],
+["Best Login Streak",state.login.best+"d"],["Achievements",`${state.ach.length}/${ACH.length}`],["Legendary Cleared",state.counters.legend],
+["Weekly Bosses",state.counters.bw],["Monthly Bosses",state.counters.bm],["Skills Unlocked",`${state.skills.length}/${SKILLS.length}`],
+["Active Days",days],["Avg XP / Day (14d)",avg],["Skill Points",state.sp],
+];
+const nr=$("numbers");nr.innerHTML="";
+nums.forEach(([k,v])=>{
+const b=document.createElement("div");b.className="box";
+b.innerHTML=`<strong>${v}</strong><span>${k}</span>`;
+nr.appendChild(b);
+});
+drawChart();renderCal();
+}
+function lastNDays(n){
+const out=[];const d=new Date();
+for(let i=n-1;i>=0;i--){
+const t=new Date(d);t.setDate(d.getDate()-i);
+out.push(`${t.getFullYear()}-${String(t.getMonth()+1).padStart(2,"0")}-${String(t.getDate()).padStart(2,"0")}`);
+}
+return out;
+}
+function drawChart(){
+const cv=$("chart");const dpr=window.devicePixelRatio||1;
+const w=cv.clientWidth||600,h=170;
+cv.width=w*dpr;cv.height=h*dpr;
+const ctx=cv.getContext("2d");ctx.scale(dpr,dpr);
+ctx.clearRect(0,0,w,h);
+const days=lastNDays(14);
+const vals=days.map(d=>state.hist[d]?state.hist[d].x:0);
+const max=Math.max(10,...vals);
+const pad=6,bw=(w-pad*2)/14;
+ctx.strokeStyle="rgba(95,215,255,.12)";
+for(let i=1;i<=3;i++){const y=h-24-(h-34)*i/3;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(w,y);ctx.stroke()}
+days.forEach((d,i)=>{
+const v=vals[i],bh=Math.round((h-34)*v/max);
+const x=pad+i*bw+2,y=h-24-bh;
+const g=ctx.createLinearGradient(0,y,0,h-24);
+g.addColorStop(0,"#79e9ff");g.addColorStop(1,"#1b6f9d");
+ctx.fillStyle=v>0?g:"rgba(95,215,255,.08)";
+ctx.fillRect(x,v>0?y:h-26,bw-4,v>0?bh:2);
+if(i%2===0){ctx.fillStyle="rgba(139,163,180,.9)";ctx.font="9px Rajdhani,sans-serif";ctx.textAlign="center";
+ctx.fillText(d.slice(8)+"/"+d.slice(5,7),x+(bw-4)/2,h-8)}
+});
+}
+function renderCal(){
+const d=new Date();
+const y=d.getFullYear(),m=d.getMonth();
+$("calLabel").textContent=d.toLocaleString("en",{month:"long",year:"numeric"});
+const root=$("cal");root.innerHTML="";
+["S","M","T","W","T","F","S"].forEach(x=>{const e=document.createElement("div");e.className="dow";e.textContent=x;root.appendChild(e)});
+const first=new Date(y,m,1).getDay(),dim=new Date(y,m+1,0).getDate();
+for(let i=0;i<first;i++){const e=document.createElement("div");e.className="day blank";root.appendChild(e)}
+for(let day=1;day<=dim;day++){
+const k=`${y}-${String(m+1).padStart(2,"0")}-${String(day).padStart(2,"0")}`;
+const e=document.createElement("div");
+e.className="day"+((state.hist[k]&&state.hist[k].q>0)?" on":"")+(k===today()?" today":"");
+e.textContent=day;root.appendChild(e);
+}
+}
+function renderAwards(){
+const tr=$("titles");tr.innerHTML="";
+TITLES.forEach(([lv,n])=>{
+const cur=titleFor(state.level)===n;
+const el=document.createElement("div");
+el.className=`trow${cur?" now":state.level>=lv?"":" locked"}`;
+el.innerHTML=`<span>${n}</span><span>Lv. ${lv}${cur?" · CURRENT":""}</span>`;
+tr.appendChild(el);
+});
+$("achCount").textContent=`${state.ach.length} / ${ACH.length} unlocked`;
+const root=$("achievements");root.innerHTML="";
+const list=[...ACH].sort((a,b)=>(state.ach.includes(b.id)?1:0)-(state.ach.includes(a.id)?1:0));
+list.forEach(a=>{
+const on=state.ach.includes(a.id);
+const el=document.createElement("div");
+el.className=`achievement${on?"":" locked"}`;
+el.innerHTML=`<div class="achicon">${a.icon}</div><div><strong>${a.title}</strong><span>${a.desc}</span></div>`;
+root.appendChild(el);
+});
+}
+function render(){
+normalize();
+renderStatus();renderQuests();renderLogin();renderBoss();renderTree();
+if($("page-stats").classList.contains("active"))renderStats();
+if($("page-awards").classList.contains("active"))renderAwards();
+$("soundBtn").textContent=state.settings.sound?"♪":"✕";
+save();
+}
+
+/* ============ tabs ============ */
+document.querySelectorAll(".tab").forEach(t=>{
+t.onclick=()=>{
+document.querySelectorAll(".tab").forEach(x=>x.classList.remove("active"));
+document.querySelectorAll(".page").forEach(x=>x.classList.remove("active"));
+t.classList.add("active");
+$("page-"+t.dataset.page).classList.add("active");
+if(t.dataset.page==="stats")renderStats();
+if(t.dataset.page==="awards")renderAwards();
+};
+});
+
+/* ============ timer ============ */
+let timer=1500,timerId=null;
+function updateClock(){const m=Math.floor(timer/60),s=timer%60;$("clock").textContent=`${String(m).padStart(2,"0")}:${String(s).padStart(2,"0")}`}
+$("startTimer").onclick=()=>{if(timerId)return;timerId=setInterval(()=>{timer--;updateClock();if(timer<=0){clearInterval(timerId);timerId=null;timer=1500;updateClock();toast("Focus session complete. Claim a focus quest after finishing the work.");sfx("ach")}},1000)};
+$("pauseTimer").onclick=()=>{clearInterval(timerId);timerId=null};
+$("resetTimer").onclick=()=>{clearInterval(timerId);timerId=null;timer=1500;updateClock()};
+
+/* ============ wiring ============ */
+statNames.forEach(n=>{const o=document.createElement("option");o.value=n;o.textContent=n;$("customStat").appendChild(o)});
+$("questForm").onsubmit=e=>{
+e.preventDefault();
+const t=$("customTitle").value.trim();if(!t)return;
+state.custom.push({id:`${Date.now()}-${Math.random().toString(16).slice(2)}`,title:t.slice(0,60),desc:$("customDesc").value.trim().slice(0,120),stat:$("customStat").value,xp:+$("customXp").value});
+state.counters.custom++;
+$("customTitle").value="";$("customDesc").value="";
+checkAch(false);save();render();toast("Custom quest added");
+};
+$("editName").onclick=()=>{const n=prompt("Enter your player name:",state.name);if(n&&n.trim()){state.name=n.trim().slice(0,24);save();render()}};
+$("soundBtn").onclick=()=>{state.settings.sound=!state.settings.sound;save();render();if(state.settings.sound)sfx("q")};
+$("loginBtn").onclick=claimLogin;
+$("bossBtn").onclick=claimBossW;
+$("bossMBtn").onclick=claimBossM;
+$("closeModal").onclick=()=>$("modal").classList.remove("show");
+$("modal").onclick=e=>{if(e.target===$("modal"))$("modal").classList.remove("show")};
+$("exportBtn").onclick=()=>{
+const blob=new Blob([JSON.stringify(state,null,2)],{type:"application/json"}),a=document.createElement("a");
+a.href=URL.createObjectURL(blob);a.download="ascend-system-save.json";a.click();URL.revokeObjectURL(a.href);
+};
+$("importFile").onchange=e=>{
+const f=e.target.files[0];if(!f)return;
+const r=new FileReader();
+r.onload=()=>{
+try{
+const x=JSON.parse(r.result);
+state=(x&&x.v===2)?{...fresh(),...x,stats:{...fresh().stats,...(x.stats||{})},counters:{...fresh().counters,...(x.counters||{})},settings:{...fresh().settings,...(x.settings||{})}}:migrateV1(x);
+checkAch(true);save();render();toast("Save imported successfully");
+}catch(err){alert("The save file could not be read.")}
+};
+r.readAsText(f);e.target.value="";
+};
+$("resetData").onclick=()=>{if(confirm("Reset all levels, XP, stats, skills and quests?")){state=fresh();store.del(KEY);save();render();toast("Progress reset")}};
+
+/* ============ boot ============ */
+checkAch(true);
+render();updateClock();
+if(!store.ok)toast("Storage unavailable here — progress won't persist in this environment.");
+</script>
+</body>
+</html>
+.branch{margin-bottom:6px}
+.quest{grid-template-columns:1fr}
+.actions{justify-content:stretch}.actions .btn{flex:1}
+.row2{grid-template-columns:1fr}
+.numbers{grid-template-columns:repeat(2,1fr)}
+.sub{display:none}
+}
+@media(prefers-reduced-motion:reduce){
+*{animation:none!important;transition:none!important}
+}
+</style>
+</head>
+<body>
+<main class="app">
+
+<header class="topbar">
+<div class="brand"><div class="logo">A</div><div><h1>Ascend System</h1><div class="sub">Real-life progression protocol</div></div></div>
+<div class="topright"><button class="btn small" id="soundBtn" title="Sound">♪</button><div class="rank" id="rank">E</div></div>
+</header>
+
+<article class="panel">
+<div class="head"><h2 class="title">Player Status</h2><button class="btn small" id="editName">Edit Name</button></div>
+<div class="status">
+<div class="orbwrap"><div class="orb"><div><small>LEVEL</small><strong id="level">1</strong></div></div></div>
+<div>
+<div class="player"><h2 id="name">Player</h2><span class="tag" id="titleTag">Rookie</span><span class="chip" id="multChip">XP ×1.00</span></div>
+<div class="xptext"><span>Experience</span><span id="xpText"><b>0</b> / 100 XP</span></div>
+<div class="bar"><div class="fill" id="xpFill"></div></div>
+<div class="meta">
+<div class="box"><strong id="streak">0</strong><span>Day Streak</span></div>
+<div class="box"><strong id="doneCount">0</strong><span>Quests Done</span></div>
+<div class="box"><strong id="totalXp">0</strong><span>Total XP</span></div>
+</div>
+</div>
+</div>
+</article>
+
+<nav class="tabs" id="tabs">
+<button class="tab active" data-page="quests">Quests</button>
+<button class="tab" data-page="skills">Skills</button>
+<button class="tab" data-page="stats">Stats</button>
+<button class="tab" data-page="awards">Awards</button>
+<button class="tab" data-page="data">Data</button>
+</nav>
+
+<!-- ================= QUESTS ================= -->
+<section class="page active" id="page-quests">
+
+<article class="panel">
+<div class="head"><h2 class="title">Daily Login</h2><span class="muted" id="loginStreakTxt"></span></div>
+<div class="login">
+<div><h3>Sign-in Reward</h3><p id="loginDesc">Claim your daily reward. Rewards grow with your login streak — day 7 grants a Skill Point.</p></div>
+<button class="btn good" id="loginBtn">Claim</button>
+</div>
+</article>
+
+<article class="panel">
+<div class="head"><h2 class="title">Daily Quests</h2><span class="muted" id="dailyProgress">0 completed</span></div>
+<div class="qgrid" id="questList"></div>
+</article>
+
+<article class="panel">
+<div class="head"><h2 class="title">Custom Quests</h2></div>
+<div class="qgrid" id="customList"></div>
+<form class="form" id="questForm" style="margin-top:10px">
+<input id="customTitle" maxlength="60" placeholder="Example: Read 10 pages" required>
 <div class="row2">
 <select id="customStat"></select>
 <select id="customXp">
