@@ -242,6 +242,7 @@ font-family:var(--disp);font-size:1.9rem;color:var(--cyan-hi);text-shadow:0 0 14
 <button class="tab" data-page="skills">Skills</button>
 <button class="tab" data-page="stats">Stats</button>
 <button class="tab" data-page="awards">Awards</button>
+<button class="tab" data-page="discipline">No Fap</button>
 <button class="tab" data-page="data">Data</button>
 </nav>
 
@@ -346,6 +347,47 @@ font-family:var(--disp);font-size:1.9rem;color:var(--cyan-hi);text-shadow:0 0 14
 <div class="head"><h2 class="title">Achievements</h2><span class="muted" id="achCount"></span></div>
 <div class="achgrid" id="achievements"></div>
 </article>
+</section>
+
+<!-- ================= DISCIPLINE ================= -->
+<section class="page" id="page-discipline">
+<article class="panel">
+<div class="head"><h2 class="title">No-Fap Protocol</h2><span class="muted" id="nfResets">Resets: 0</span></div>
+<div style="text-align:center;margin-bottom:14px;position:relative;z-index:1">
+<div id="nfFlame" style="font-size:3rem;line-height:1;filter:grayscale(1)">🔥</div>
+<div id="nfRank" style="font-family:var(--disp);color:var(--gold);letter-spacing:.15em;font-size:.95rem;margin-top:8px">UNRANKED</div>
+<div class="muted" id="nfRankNext" style="font-size:.78rem;margin-top:2px"></div>
+</div>
+<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;position:relative;z-index:1">
+<div style="text-align:center;padding:14px;border:1px solid rgba(95,215,255,.12);background:rgba(95,215,255,.02)">
+<div style="font-family:var(--disp);font-size:2.4rem;color:var(--cyan);text-shadow:0 0 14px rgba(95,215,255,.45)" id="nofapCurrent">0</div>
+<div style="color:var(--muted);font-size:.78rem;letter-spacing:.1em;margin-top:4px">CURRENT STREAK</div>
+</div>
+<div style="text-align:center;padding:14px;border:1px solid rgba(255,211,107,.25);background:rgba(255,211,107,.08)">
+<div style="font-family:var(--disp);font-size:2.4rem;color:var(--gold);text-shadow:0 0 14px rgba(255,211,107,.45)" id="nofapBest">0</div>
+<div style="color:var(--muted);font-size:.78rem;letter-spacing:.1em;margin-top:4px">PERSONAL BEST</div>
+</div>
+</div>
+<div class="xptext" style="position:relative;z-index:1"><span>Next milestone</span><span id="nfMileTxt"></span></div>
+<div class="bar" style="position:relative;z-index:1"><div class="fill" id="nfMileFill"></div></div>
+<div style="display:flex;gap:8px;margin-top:14px;position:relative;z-index:1">
+<button class="btn good" id="nofapAddBtn" style="flex:1">+1 Day</button>
+<button class="btn danger" id="nofapResetBtn">Relapse / Reset</button>
+</div>
+<p class="muted" style="margin:10px 0 0;font-size:.78rem;position:relative;z-index:1">Milestone XP and Skill Points are granted automatically as your streak grows. A reset applies an XP penalty (up to −100) and returns the counter to zero — but your best run, rank history and rewards already earned are never taken back.</p>
+</article>
+
+<article class="panel">
+<div class="head"><h2 class="title">365-Day Journey</h2><span class="muted" id="nofapProgress">0% complete</span></div>
+<p class="muted" style="margin:0 0 12px;position:relative;z-index:1">One square per day. Gold-bordered squares are milestone days with rewards waiting.</p>
+<div id="nofapMap" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(15px,1fr));gap:2px;position:relative;z-index:1"></div>
+</article>
+
+<article class="panel">
+<div class="head"><h2 class="title">Milestone Rewards</h2></div>
+<div id="nofapMilestones" style="display:grid;gap:7px;position:relative;z-index:1"></div>
+</article>
+
 </section>
 
 <!-- ================= DATA ================= -->
@@ -493,7 +535,8 @@ function fresh(){return{v:2,name:"Player",level:1,xp:0,totalXp:0,totalQuests:0,s
 stats:Object.fromEntries(statNames.map(x=>[x,10])),custom:[],
 daily:{date:null,ids:[],done:[]},bossW:{week:weekKey(),done:false},bossM:{month:monthKey(),done:false},
 sp:0,skills:[],login:{last:null,streak:0,best:0},hist:{},
-counters:{legend:0,bw:0,bm:0,logins:0,custom:0},ach:[],settings:{sound:true}}}
+counters:{legend:0,bw:0,bm:0,logins:0,custom:0},ach:[],settings:{sound:true},
+nofap:{current:0,best:0,resets:0,claimed:{}}}}
 function migrateV1(x){
 const s=fresh();
 ["name","level","xp","totalXp","totalQuests","streak","lastActive"].forEach(k=>{if(x[k]!=null)s[k]=x[k]});
@@ -505,7 +548,7 @@ if(x.boss&&x.boss.week===weekKey()&&x.boss.done)s.bossW.done=true;
 return s;
 }
 function load(){
-try{const x=JSON.parse(store.get(KEY));if(x&&x.v===2)return {...fresh(),...x,stats:{...fresh().stats,...(x.stats||{})},counters:{...fresh().counters,...(x.counters||{})},settings:{...fresh().settings,...(x.settings||{})}}}catch(e){}
+try{const x=JSON.parse(store.get(KEY));if(x&&x.v===2)return {...fresh(),...x,stats:{...fresh().stats,...(x.stats||{})},counters:{...fresh().counters,...(x.counters||{})},settings:{...fresh().settings,...(x.settings||{})},nofap:{...fresh().nofap,...(x.nofap||{})}}}catch(e){}
 try{const o=JSON.parse(store.get(OLDKEY));if(o){const m=migrateV1(o);return m}}catch(e){}
 return fresh();
 }
@@ -883,11 +926,62 @@ el.innerHTML=`<div class="achicon">${a.icon}</div><div><strong>${a.title}</stron
 root.appendChild(el);
 });
 }
+const NF_MILES=[[3,30,0,"First Flame"],[7,50,0,"Week Warrior"],[14,75,0,"Fortnight"],[21,100,0,"Habit Breaker"],[30,150,1,"Month Master"],[50,200,0,"Half Century"],[75,250,0,"Diamond Will"],[100,300,1,"Century"],[150,350,0,"Iron Season"],[200,400,1,"Beyond Limits"],[250,450,0,"Relentless"],[300,500,0,"Final Stretch"],[365,1000,3,"LEGEND — Year One"]];
+const NF_RANKS=[[0,"UNRANKED"],[1,"E · AWAKENED"],[3,"D · NOVICE WILL"],[7,"C · IRON WEEK"],[14,"B · STEEL MIND"],[21,"A · TEMPERED"],[30,"S · SOVEREIGN WILL"],[50,"SS · ASCENDANT"],[75,"SS+ · UNBREAKABLE"],[100,"SSS · CENTURION"],[150,"SSS+ · TRANSCENDENT"],[200,"EX · BEYOND LIMITS"],[365,"MONARCH · ABSOLUTE"]];
+function nfRank(d){let r=NF_RANKS[0][1];NF_RANKS.forEach(([n,t])=>{if(d>=n)r=t});return r}
+function nfNextRank(d){for(const [n,t] of NF_RANKS){if(d<n)return[n,t]}return null}
+function nfNextMile(d){for(const m of NF_MILES){if(d<m[0])return m}return null}
+function renderDiscipline(){
+$("nofapCurrent").textContent=state.nofap.current;
+$("nofapBest").textContent=state.nofap.best;
+$("nfResets").textContent=`Resets: ${state.nofap.resets}`;
+const d=state.nofap.current;
+const fl=$("nfFlame");
+fl.style.filter=d>0?"none":"grayscale(1)";
+fl.style.fontSize=`${Math.min(5,2.6+d/60)}rem`;
+fl.textContent=d>=365?"👑":d>=100?"⚡":"🔥";
+$("nfRank").textContent=nfRank(d);
+const nr=nfNextRank(d);
+$("nfRankNext").textContent=nr?`Next rank in ${nr[0]-d} day${nr[0]-d===1?"":"s"}: ${nr[1]}`:"Highest rank achieved.";
+const nm=nfNextMile(d);
+if(nm){
+const prev=NF_MILES.filter(m=>m[0]<=d).pop();
+const base=prev?prev[0]:0;
+$("nfMileTxt").textContent=`${nm[3]} · Day ${nm[0]} · +${nm[1]} XP${nm[2]?` +${nm[2]} SP`:""}`;
+$("nfMileFill").style.width=`${Math.min(100,((d-base)/(nm[0]-base))*100)}%`;
+}else{$("nfMileTxt").textContent="All milestones cleared.";$("nfMileFill").style.width="100%"}
+const pct=Math.min(100,Math.round((d/365)*100));
+$("nofapProgress").textContent=d>365?`Journey complete · Day ${d}`:`${pct}% · Day ${d}/365`;
+const map=$("nofapMap");map.innerHTML="";
+const mileDays=new Set(NF_MILES.map(m=>m[0]));
+for(let i=0;i<365;i++){
+const el=document.createElement("div");
+el.style.width="15px";el.style.height="15px";el.style.borderRadius="2px";
+el.title=`Day ${i+1}`;
+el.style.border=mileDays.has(i+1)?"1px solid rgba(255,211,107,.7)":"1px solid rgba(95,215,255,.08)";
+if(i<d){el.style.background="linear-gradient(135deg,#79f2b0,#3fc3ef)";el.style.boxShadow="0 0 5px rgba(121,242,176,.3)"}
+else{el.style.background="rgba(95,215,255,.03)"}
+map.appendChild(el);
+}
+const mil=$("nofapMilestones");mil.innerHTML="";
+NF_MILES.forEach(([day,xp,sp,name])=>{
+const got=!!state.nofap.claimed[day];
+const el=document.createElement("div");
+el.style.display="flex";el.style.justifyContent="space-between";el.style.alignItems="center";
+el.style.padding="9px 11px";el.style.border=`1px solid ${got?"rgba(121,242,176,.4)":"rgba(95,215,255,.12)"}`;
+el.style.background=got?"rgba(60,170,110,.1)":"rgba(95,215,255,.03)";
+el.style.opacity=got||state.nofap.current>=0?"1":"1";
+if(!got&&state.nofap.best<day)el.style.opacity=".55";
+el.innerHTML=`<div><strong style="font-size:.88rem">${name}</strong><div style="color:var(--muted);font-size:.75rem">Day ${day} · +${xp} XP${sp?` · +${sp} SP`:""}</div></div><div style="font-family:var(--disp);color:${got?"var(--good)":"var(--muted)"}">${got?"✓":"—"}</div>`;
+mil.appendChild(el);
+});
+}
 function render(){
 normalize();
 renderStatus();renderQuests();renderLogin();renderBoss();renderTree();
 if($("page-stats").classList.contains("active"))renderStats();
 if($("page-awards").classList.contains("active"))renderAwards();
+if($("page-discipline").classList.contains("active"))renderDiscipline();
 $("soundBtn").textContent=state.settings.sound?"♪":"✕";
 save();
 }
@@ -901,8 +995,48 @@ t.classList.add("active");
 $("page-"+t.dataset.page).classList.add("active");
 if(t.dataset.page==="stats")renderStats();
 if(t.dataset.page==="awards")renderAwards();
+if(t.dataset.page==="discipline")renderDiscipline();
 };
 });
+
+$("nofapAddBtn").onclick=()=>{
+state.nofap.current++;
+state.nofap.best=Math.max(state.nofap.best,state.nofap.current);
+const d=state.nofap.current;
+const mile=NF_MILES.find(m=>m[0]===d);
+let big=false;
+if(mile&&!state.nofap.claimed[d]){
+state.nofap.claimed[d]=true;
+const amt=gainXp(mile[1],false);
+if(mile[2])state.sp+=mile[2];
+toast(`🏆 Milestone: ${mile[3]} · +${amt} XP${mile[2]?` +${mile[2]} SP`:""}`);
+sfx("ach");
+big=d>=30;
+}else{
+toast(d>365?`Streak: Day ${d} 👑 Beyond the journey.`:`Streak: Day ${d} 🔥`);sfx("q");
+}
+checkAch(false);save();render();
+if(pendingLevel){showLevelModal()}
+else if(big){
+$("modalLevel").textContent=d;
+$("modalText").innerHTML=`<b>${mile[3]}</b> reached.<br>Your discipline rank is now <b>${nfRank(d)}</b>. The System acknowledges your will.`;
+$("modal").classList.add("show");sfx("lvl");
+}
+};
+$("nofapResetBtn").onclick=()=>{
+if(state.nofap.current===0){toast("Streak is already at zero. Start climbing.");return}
+if(confirm("Log a relapse and reset the streak to 0? An XP penalty will apply. (Best run and earned rewards are preserved.)")){
+const penalty=Math.min(100,20+state.nofap.current*2);
+const applied=Math.min(penalty,state.xp);
+state.xp-=applied;
+state.nofap.resets++;
+const lost=state.nofap.current;
+state.nofap.current=0;
+save();render();
+toast(`⚠ Penalty: −${applied} XP · Run of ${lost}d logged. Best (${state.nofap.best}d) preserved. Begin again, Player.`);
+sfx("q");
+}
+};
 
 /* ============ timer ============ */
 let timer=1500,timerId=null;
